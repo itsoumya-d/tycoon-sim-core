@@ -40,6 +40,26 @@ int main() {
     check(one.sold >= 0 && one.produced == 500, "month output");
     check(tycoon::production_cost(cheap) > 0.0, "production cost positive");
 
+    tycoon::Company saved{765432.10, 42};
+    const auto payload = tycoon::serialize_company(saved);
+    const auto restored = tycoon::deserialize_company(payload);
+    check(tycoon::state_hash(saved) == tycoon::state_hash(restored), "save/load preserves state hash");
+    check(restored.inventory == 42, "save/load preserves inventory");
+
+    const auto replay_a = tycoon::replay_hash(cheap, segment, 12, 400, 7);
+    const auto replay_b = tycoon::replay_hash(cheap, segment, 12, 400, 7);
+    const auto replay_c = tycoon::replay_hash(cheap, segment, 12, 400, 8);
+    check(replay_a == replay_b, "replay is deterministic for the same seed");
+    check(replay_a != replay_c, "seed changes replay state");
+
+    bool rejected = false;
+    try {
+        (void)tycoon::deserialize_company("bad payload");
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    check(rejected, "invalid save payload rejected");
+
     if (failures == 0) {
         std::cout << "all tests passed\n";
         return 0;

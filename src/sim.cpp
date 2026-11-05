@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <sstream>
 #include <stdexcept>
 
 namespace tycoon {
@@ -69,6 +71,56 @@ int monthly_demand(const CarSpec& car, const MarketSegment& segment, int month) 
     const double seasonality = 1.0 + 0.08 * std::sin(static_cast<double>(month) * 0.52);
     const double raw = segment.monthly_demand * appeal(car, segment) * elasticity * seasonality;
     return std::max(0, static_cast<int>(std::lround(raw)));
+}
+
+std::uint64_t state_hash(const Company& company) {
+    std::uint64_t hash = 1469598103934665603ULL;
+    auto mix = [&hash](std::uint64_t value) {
+        hash ^= value;
+        hash *= 1099511628211ULL;
+    };
+    const auto cash_bits = static_cast<std::uint64_t>(static_cast<std::int64_t>(std::llround(company.cash * 100.0)));
+    mix(cash_bits);
+    mix(static_cast<std::uint64_t>(company.inventory));
+    return hash;
+}
+
+std::string serialize_company(const Company& company) {
+    std::ostringstream out;
+    out.precision(17);
+    out << "company-v1 cash=" << company.cash << " inventory=" << company.inventory;
+    return out.str();
+}
+
+Company deserialize_company(const std::string& payload) {
+    std::istringstream in(payload);
+    std::string version, cash_token, inventory_token;
+    if (!(in >> version >> cash_token >> inventory_token) || version != "company-v1") {
+        throw std::invalid_argument("invalid company save payload");
+    }
+    const auto cash_pos = cash_token.find('=');
+    const auto inventory_pos = inventory_token.find('=');
+    if (cash_pos == std::string::npos || inventory_pos == std::string::npos) {
+        throw std::invalid_argument("invalid company save fields");
+    }
+    Company company;
+    company.cash = std::stod(cash_token.substr(cash_pos + 1));
+    company.inventory = std::stoi(inventory_token.substr(inventory_pos + 1));
+    if (company.inventory < 0 || !std::isfinite(company.cash)) {
+        throw std::invalid_argument("invalid company state");
+    }
+    return company;
+}
+
+std::uint64_t replay_hash(const CarSpec& car, const MarketSegment& segment,
+                          int months, int units_per_month, std::uint64_t seed) {
+    if (months < 0 || units_per_month < 0) throw std::invalid_argument("months and units_per_month must be non-negative");
+    Company company;
+    company.cash = 500000.0 + static_cast<double>(seed % 1000);
+    for (int month = 0; month < months; ++month) {
+        simulate_month(company, car, segment, units_per_month, month);
+    }
+    return state_hash(company);
 }
 
 MonthResult simulate_month(Company& company, const CarSpec& car,

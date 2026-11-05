@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -54,5 +55,11 @@ double appeal(const CarSpec& car, const MarketSegment& segment);
 int monthly_demand(const CarSpec& car, const MarketSegment& segment, int month);
 MonthResult simulate_month(Company& company, const CarSpec& car,
                            const MarketSegment& segment, int units_produced, int month);
+
+std::uint64_t state_hash(const Company& company);
+std::string serialize_company(const Company& company);
+Company deserialize_company(const std::string& payload);
+std::uint64_t replay_hash(const CarSpec& car, const MarketSegment& segment,
+                          int months, int units_per_month, std::uint64_t seed = 0);
 
 }  // namespace tycoon
